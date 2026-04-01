@@ -6,8 +6,8 @@ import random
 from pathlib import Path
 from datetime import datetime
 
-TOKEN = os.getenv("8574441866:AAHnn3FdSMoqWQblo66P8zc9k_I_OVyHw2Q")
-CHAT_ID = os.getenv("-1003682526875")
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 BOT_NAME = os.getenv("BOT_NAME", "MOSAIC-1")
 
 URLS = {
