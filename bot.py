@@ -6,9 +6,9 @@ import random
 from pathlib import Path
 from datetime import datetime
 
-TOKEN=8574441866:AAHnn3FdSMoqWQblo66P8zc9k_I_OVyHw2Q
-CHAT_ID=-1003682526875
-BOT_NAME=MOSAIC-1
+TOKEN = os.getenv("8574441866:AAHnn3FdSMoqWQblo66P8zc9k_I_OVyHw2Q")
+CHAT_ID = os.getenv("-1003682526875")
+BOT_NAME = os.getenv("BOT_NAME", "MOSAIC-1")
 
 URLS = {
     "Aprel 2026": "https://appointment.mosaicvisa.com/calendar/11?month=2026-04",
@@ -23,13 +23,14 @@ REQUEST_TIMEOUT = 60
 SLOT_REPEAT_COUNT = 7
 SLOT_REPEAT_DELAY = 1
 
-# Railway-safe storage
 BASE_DIR = Path("/tmp/mosaic_bot")
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE = BASE_DIR / "bot.log"
 SNAP_DIR = BASE_DIR / "mosaic_snaps"
 SNAP_DIR.mkdir(parents=True, exist_ok=True)
+
+SIREN_FILE = Path("/app/siren.ogg")
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
@@ -50,12 +51,11 @@ def log(text: str):
 def send_message(text: str):
     if not TOKEN or not CHAT_ID:
         log("SEND ERROR: TOKEN or CHAT_ID missing")
-        return
+        return False
 
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     try:
         r = requests.post(
-            url,
+            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
             data={
                 "chat_id": CHAT_ID,
                 "text": text,
@@ -65,8 +65,34 @@ def send_message(text: str):
         )
         log(f"SEND STATUS: {r.status_code}")
         log(f"SEND BODY: {r.text}")
+        return r.ok
     except Exception as e:
         log(f"SEND ERROR: {e}")
+        return False
+
+def send_voice_siren():
+    if not TOKEN or not CHAT_ID:
+        log("VOICE ERROR: TOKEN or CHAT_ID missing")
+        return False
+
+    if not SIREN_FILE.exists():
+        log(f"VOICE ERROR: file not found -> {SIREN_FILE}")
+        return False
+
+    try:
+        with open(SIREN_FILE, "rb") as f:
+            r = requests.post(
+                f"https://api.telegram.org/bot{TOKEN}/sendVoice",
+                data={"chat_id": CHAT_ID},
+                files={"voice": f},
+                timeout=30
+            )
+        log(f"VOICE STATUS: {r.status_code}")
+        log(f"VOICE BODY: {r.text}")
+        return r.ok
+    except Exception as e:
+        log(f"VOICE ERROR: {e}")
+        return False
 
 def save_snapshot(name: str, html: str):
     safe = name.replace(" ", "_")
@@ -86,7 +112,9 @@ def scream_slot(month: str, total: int, url: str):
         f"👉 {url}"
     )
 
-    for _ in range(SLOT_REPEAT_COUNT):
+    send_voice_siren()
+
+    for i in range(SLOT_REPEAT_COUNT):
         send_message(msg)
         time.sleep(SLOT_REPEAT_DELAY)
 
