@@ -8,7 +8,7 @@ from datetime import datetime
 
 TOKEN = "8574441866:AAHnn3FdSMoqWQblo66P8zc9k_I_OVyHw2Q"
 CHAT_ID = "-1003682526875"
-BOT_NAME = "MOSAIC-PC"
+BOT_NAME = "MOSAIC-1"
 
 URLS = {
     "Aprel 2026": "https://appointment.mosaicvisa.com/calendar/11?month=2026-04",
