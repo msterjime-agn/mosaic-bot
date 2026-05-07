@@ -10,7 +10,7 @@ def log(t):
     LOG_FILE.open('a', encoding='utf-8').write(line+'\n')
 while True:
     log('STARTING BOT')
-    p=subprocess.Popen(['py', BOT_FILE])
+    p = subprocess.Popen(["python", BOT_FILE])
     code=p.wait()
     log(f'BOT EXITED WITH CODE {code}. RESTART IN 10 SEC')
     time.sleep(10)
