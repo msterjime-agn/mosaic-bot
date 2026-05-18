@@ -5,7 +5,7 @@ from html import unescape
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
-TOKEN=os.getenv('TOKEN','8574441866:AAHnn3FdSMoqWQblo66P8zc9k_I_OVyHw2Q')
+TOKEN=os.getenv('TOKEN','8574441866:AAEB-iMe93NyoyECEuVYkyDWONbkdyJub50')
 CHAT_ID=os.getenv('CHAT_ID','-1003682526875')
 BOT_NAME=os.getenv('BOT_NAME','MOSAIC-ULTRA')
 CALENDARS={'Ashgabat':11,'Ashgabat VIP':12,'Ashgabat Student Visa':20}
