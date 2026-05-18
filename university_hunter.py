@@ -7,7 +7,7 @@ import urllib3
 
 import requests
 from bs4 import BeautifulSoup
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -204,18 +204,25 @@ def extract_dates(text):
 
     for pattern in DATE_PATTERNS:
         found = re.finditer(pattern, norm, flags=re.IGNORECASE)
-
         for match in found:
             dates.append(match.group(0))
 
     return list(dict.fromkeys(dates))[:8]
 
 
-async def send_message(bot, text):
+async def send_message(bot, text, url=None):
+    reply_markup = None
+
+    if url:
+        reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔗 Siteyi aç", url=url)]
+        ])
+
     await bot.send_message(
         chat_id=CHAT_ID,
         text=text[:3900],
-        disable_web_page_preview=False
+        disable_web_page_preview=False,
+        reply_markup=reply_markup
     )
 
 
@@ -273,7 +280,7 @@ async def check_universities():
                             for s in snippets:
                                 msg += f"• {s}\n"
 
-                        await send_message(bot, msg)
+                        await send_message(bot, msg, url=url)
 
                         sent_hashes.append(message_hash)
                         state[url]["sent_hashes"] = sent_hashes[-20:]
@@ -282,19 +289,7 @@ async def check_universities():
 
         except Exception as e:
             error_key = f"error_{url}"
-            last_error = state.get(error_key)
-
-            error_text = str(e)[:250]
-
-            if last_error != error_text:
-                await send_message(
-                    bot,
-                    f"⚠️ Kontrol hatası\n\n"
-                    f"🏫 {name}\n"
-                    f"🔗 {url}\n\n"
-                    f"{error_text}"
-                )
-                state[error_key] = error_text
+            state[error_key] = str(e)[:250]
 
     save_state(state)
 
