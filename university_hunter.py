@@ -17,95 +17,63 @@ CHAT_ID = os.getenv("CHAT_ID")
 CHECK_INTERVAL = 21600  # 6 часов
 STATE_FILE = "university_state.json"
 
-MAIN_KEYWORDS = [
-    "2026-2027",
-    "uluslararası öğrenci",
-    "yabancı uyruklu",
-    "yurtdışından öğrenci",
-    "başvuru",
-    "başvuruları",
-    "aday öğrenci",
-    "kesin kayıt",
-    "ek yerleştirme",
-    "kontenjan",
-    "takvim",
-    "kılavuz"
+UNIVERSITIES = [
+    {
+        "name": "Kütahya Dumlupınar Üniversitesi",
+        "url": "https://iso.dpu.edu.tr/"
+    },
+    {
+        "name": "Çukurova Üniversitesi",
+        "url": "https://iso.cu.edu.tr/"
+    },
+    {
+        "name": "Trakya Üniversitesi",
+        "url": "https://disiliskiler.trakya.edu.tr/"
+    },
+    {
+        "name": "Karadeniz Teknik Üniversitesi",
+        "url": "https://www.ktu.edu.tr/oidb"
+    },
+    {
+        "name": "Afyon Kocatepe Üniversitesi",
+        "url": "https://yos.aku.edu.tr/"
+    },
+    {
+        "name": "Uşak Üniversitesi",
+        "url": "https://admission.usak.edu.tr/"
+    }
 ]
 
-DIPLOMA_KEYWORDS = [
+KEYWORDS = [
+    "uluslararası öğrenci",
+    "yabancı öğrenci",
     "diploma",
-    "lise diploması",
-    "diploma notu",
-    "mezuniyet",
-    "ortaöğretim",
-    "secondary school",
-    "high school diploma"
+    "lise",
+    "başvuru",
+    "kayıt",
+    "2026-2027",
+    "ön kayıt",
+    "international student"
 ]
 
 NEGATIVE_KEYWORDS = [
-    "personel alımı",
-    "ihale",
-    "akademik kadro",
-    "iş ilanı",
-    "yemek listesi",
-    "spor",
+    "erasmus",
+    "mevlana",
+    "farabi",
+    "personel",
+    "yüksek lisans",
+    "master",
+    "doktora",
     "konferans",
-    "sempozyum"
-]
-
-DATE_PATTERNS = [
-    r"\d{1,2}[./-]\d{1,2}[./-]\d{4}",
-    r"\d{1,2}\s*(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)\s*\d{4}",
-    r"\d{1,2}\s*-\s*\d{1,2}\s*(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)\s*\d{4}",
-]
-
-UNIVERSITIES = [
-    {"name": "Kütahya Dumlupınar Üniversitesi", "url": "https://iro.dpu.edu.tr/"},
-    {"name": "Çukurova Üniversitesi", "url": "https://iso.cu.edu.tr/"},
-    {"name": "Trakya Üniversitesi", "url": "https://disiliskiler.trakya.edu.tr/"},
-    {"name": "Kafkas Üniversitesi", "url": "https://www.kafkas.edu.tr/"},
-    {"name": "Ardahan Üniversitesi", "url": "https://www.ardahan.edu.tr/"},
-    {"name": "Afyon Kocatepe Üniversitesi", "url": "https://yos.aku.edu.tr/"},
-    {"name": "Zonguldak Bülent Ecevit Üniversitesi", "url": "https://iso.beun.edu.tr/"},
-    {"name": "Uşak Üniversitesi", "url": "https://admission.usak.edu.tr/"},
-    {"name": "Karadeniz Teknik Üniversitesi", "url": "https://www.ktu.edu.tr/oidb"},
-    {"name": "Recep Tayyip Erdoğan Üniversitesi", "url": "https://iso.erdogan.edu.tr/"},
-    {"name": "Süleyman Demirel Üniversitesi", "url": "https://w3.sdu.edu.tr/"},
-    {"name": "Balıkesir Üniversitesi", "url": "https://www.balikesir.edu.tr/"},
-    {"name": "Selçuk Üniversitesi", "url": "https://www.selcuk.edu.tr/"},
-    {"name": "Atatürk Üniversitesi", "url": "https://www.atauni.edu.tr/"},
-    {"name": "Ondokuz Mayıs Üniversitesi", "url": "https://www.omu.edu.tr/"},
-    {"name": "Muğla Sıtkı Koçman Üniversitesi", "url": "https://www.mu.edu.tr/"},
-    {"name": "Sakarya Uygulamalı Bilimler Üniversitesi", "url": "https://studyin.subu.edu.tr/"},
-    {"name": "Anadolu Üniversitesi", "url": "https://www.anadolu.edu.tr/"},
-    {"name": "Kastamonu Üniversitesi", "url": "https://www.kastamonu.edu.tr/"},
-    {"name": "Bartın Üniversitesi", "url": "https://w3.bartin.edu.tr/"},
-    {"name": "Aksaray Üniversitesi", "url": "https://www.aksaray.edu.tr/"},
-    {"name": "Yozgat Bozok Üniversitesi", "url": "https://www.bozok.edu.tr/"},
-    {"name": "Bayburt Üniversitesi", "url": "https://www.bayburt.edu.tr/"},
-    {"name": "Gümüşhane Üniversitesi", "url": "https://www.gumushane.edu.tr/"},
-    {"name": "Siirt Üniversitesi", "url": "https://www.siirt.edu.tr/"},
-    {"name": "Bitlis Eren Üniversitesi", "url": "https://www.beu.edu.tr/"},
-    {"name": "Iğdır Üniversitesi", "url": "https://www.igdir.edu.tr/"},
-    {"name": "Kilis 7 Aralık Üniversitesi", "url": "https://www.kilis.edu.tr/"},
-    {"name": "Erzincan Binali Yıldırım Üniversitesi", "url": "https://www.ebyu.edu.tr/"},
-    {"name": "Tokat Gaziosmanpaşa Üniversitesi", "url": "https://www.gop.edu.tr/"},
-    {"name": "Karamanoğlu Mehmetbey Üniversitesi", "url": "https://www.kmu.edu.tr/"},
-    {"name": "Nevşehir Hacı Bektaş Veli Üniversitesi", "url": "https://www.nevsehir.edu.tr/"},
-    {"name": "Niğde Ömer Halisdemir Üniversitesi", "url": "https://www.ohu.edu.tr/"},
-    {"name": "Kırıkkale Üniversitesi", "url": "https://www.kku.edu.tr/"},
-    {"name": "Bolu Abant İzzet Baysal Üniversitesi", "url": "https://www.ibu.edu.tr/"},
-    {"name": "Ordu Üniversitesi", "url": "https://www.odu.edu.tr/"},
-    {"name": "Amasya Üniversitesi", "url": "https://www.amasya.edu.tr/"},
+    "haber"
 ]
 
 
 def load_state():
-    try:
+    if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
-        return {}
+    return {}
 
 
 def save_state(state):
@@ -113,192 +81,141 @@ def save_state(state):
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
-def normalize(text):
-    text = text.lower()
-    replacements = {
-        "ı": "i",
-        "ğ": "g",
-        "ü": "u",
-        "ş": "s",
-        "ö": "o",
-        "ç": "c",
-        "İ": "i",
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return " ".join(text.split())
+def text_hash(text):
+    return hashlib.md5(text.encode()).hexdigest()
 
 
-def hash_text(text):
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+def contains_keywords(text):
+    text_lower = text.lower()
 
+    positive = any(k in text_lower for k in KEYWORDS)
+    negative = any(k in text_lower for k in NEGATIVE_KEYWORDS)
 
-def fetch_text(url):
-    headers = {"User-Agent": "Mozilla/5.0 UniversityHunterBot"}
-
-    response = requests.get(
-        url,
-        headers=headers,
-        timeout=30,
-        verify=False
-    )
-    response.raise_for_status()
-
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    for tag in soup(["script", "style", "noscript"]):
-        tag.decompose()
-
-    text = soup.get_text(" ", strip=True)
-
-    links = []
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        title = a.get_text(" ", strip=True)
-
-        if href.startswith("/"):
-            href = url.rstrip("/") + href
-
-        combined = f"{title} {href}"
-        norm = normalize(combined)
-
-        if any(normalize(k) in norm for k in MAIN_KEYWORDS + DIPLOMA_KEYWORDS):
-            links.append(combined)
-
-    return text + " " + " ".join(links)
-
-
-def is_relevant(text):
-    norm = normalize(text)
-
-    if any(normalize(k) in norm for k in NEGATIVE_KEYWORDS):
-        return False
-
-    has_main = any(normalize(k) in norm for k in MAIN_KEYWORDS)
-    has_diploma = any(normalize(k) in norm for k in DIPLOMA_KEYWORDS)
-
-    return has_main and has_diploma
-
-
-def extract_snippets(text):
-    sentences = re.split(r"[.!?\n]", text)
-    snippets = []
-
-    for s in sentences:
-        clean = " ".join(s.split())
-        norm = normalize(clean)
-
-        has_main = any(normalize(k) in norm for k in MAIN_KEYWORDS)
-        has_diploma = any(normalize(k) in norm for k in DIPLOMA_KEYWORDS)
-
-        if has_main or has_diploma:
-            if 25 < len(clean) < 350:
-                snippets.append(clean)
-
-    return snippets[:6]
+    return positive and not negative
 
 
 def extract_dates(text):
-    norm = normalize(text)
-    dates = []
-
-    for pattern in DATE_PATTERNS:
-        found = re.finditer(pattern, norm, flags=re.IGNORECASE)
-        for match in found:
-            dates.append(match.group(0))
-
-    return list(dict.fromkeys(dates))[:8]
+    pattern = r"\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b"
+    return re.findall(pattern, text)
 
 
-async def send_message(bot, text, url=None):
-    reply_markup = None
+async def send_message(bot, text, url):
+    keyboard = [
+        [InlineKeyboardButton("🔗 Aç", url=url)]
+    ]
 
-    if url:
-        reply_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔗 Siteyi aç", url=url)]
-        ])
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
     await bot.send_message(
         chat_id=CHAT_ID,
-        text=text[:3900],
-        disable_web_page_preview=False,
-        reply_markup=reply_markup
+        text=text,
+        reply_markup=reply_markup,
+        disable_web_page_preview=False
     )
 
 
 async def check_universities():
+    print("=== START CHECK ===", flush=True)
+
     bot = Bot(token=BOT_TOKEN)
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0 Safari/537.36"
+        )
+    }
+
     state = load_state()
 
     for uni in UNIVERSITIES:
         name = uni["name"]
         url = uni["url"]
 
+        print(f"Checking: {name}", flush=True)
+
         try:
-            text = fetch_text(url)
-            normalized = normalize(text)
-            current_hash = hash_text(normalized)
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=25,
+                verify=False
+            )
 
-            old_data = state.get(url, {})
-            old_hash = old_data.get("page_hash")
-            sent_hashes = old_data.get("sent_hashes", [])
+            text = response.text
 
-            if old_hash is None:
-                state[url] = {
-                    "page_hash": current_hash,
-                    "sent_hashes": []
-                }
-                await asyncio.sleep(2)
+            soup = BeautifulSoup(text, "html.parser")
+
+            clean_text = soup.get_text(" ", strip=True)
+
+            if not contains_keywords(clean_text):
+                print(f"NO RELEVANT UPDATE: {name}", flush=True)
                 continue
 
-            if old_hash != current_hash:
-                state[url]["page_hash"] = current_hash
+            snippets = []
 
-                if is_relevant(text):
-                    snippets = extract_snippets(text)
-                    dates = extract_dates(text)
+            for line in clean_text.split("."):
+                line = line.strip()
 
-                    message_basis = name + url + " ".join(snippets) + " ".join(dates)
-                    message_hash = hash_text(normalize(message_basis))
+                if len(line) < 20:
+                    continue
 
-                    if message_hash not in sent_hashes:
-                        msg = (
-                            f"🎓 Yeni başvuru duyurusu olabilir\n\n"
-                            f"🏫 {name}\n"
-                            f"📌 Konu: Uluslararası öğrenci / diploma ile başvuru\n"
-                            f"🔗 {url}\n\n"
-                        )
+                if contains_keywords(line):
+                    snippets.append(line[:300])
 
-                        if dates:
-                            msg += "📅 Bulunan tarihler:\n"
-                            for d in dates:
-                                msg += f"• {d}\n"
-                            msg += "\n"
+            snippets = snippets[:5]
 
-                        if snippets:
-                            msg += "Bulunan metin:\n"
-                            for s in snippets:
-                                msg += f"• {s}\n"
+            message_hash = text_hash(clean_text[:5000])
 
-                        await send_message(bot, msg, url=url)
+            old_hash = state.get(url)
 
-                        sent_hashes.append(message_hash)
-                        state[url]["sent_hashes"] = sent_hashes[-20:]
+            if old_hash == message_hash:
+                print(f"NO CHANGES: {name}", flush=True)
+                continue
+
+            state[url] = message_hash
+            save_state(state)
+
+            dates = extract_dates(clean_text)
+
+            msg = (
+                f"✅ İlk kayıt bulundu\n\n"
+                f"🏫 {name}\n"
+                f"📌 Konu: Uluslararası öğrenci / diploma ile başvuru\n"
+                f"🔗 {url}\n\n"
+            )
+
+            if dates:
+                msg += "📅 Tarihler:\n"
+                for d in dates[:10]:
+                    msg += f"• {d}\n"
+
+                msg += "\n"
+
+            if snippets:
+                msg += "📄 Metin:\n"
+
+                for s in snippets:
+                    msg += f"• {s}\n\n"
+
+            print(f"FOUND: {name}", flush=True)
+
+            await send_message(bot, msg, url)
 
             await asyncio.sleep(2)
 
         except Exception as e:
-            error_key = f"error_{url}"
-            state[error_key] = str(e)[:250]
+            print(f"ERROR {name}: {e}", flush=True)
 
-    save_state(state)
+    print(f"SLEEPING {CHECK_INTERVAL} sec", flush=True)
 
 
-async def university_hunter_loop():
+async def main():
     while True:
         await check_universities()
         await asyncio.sleep(CHECK_INTERVAL)
 
 
 if __name__ == "__main__":
-    asyncio.run(university_hunter_loop())
+    asyncio.run(main())
