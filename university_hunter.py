@@ -191,3 +191,5 @@ async def university_hunter_loop():
         await check_universities()
 
         await asyncio.sleep(CHECK_INTERVAL)
+if __name__ == "__main__":
+    asyncio.run(university_hunter_loop())
