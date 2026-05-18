@@ -27,7 +27,9 @@ MAIN_KEYWORDS = [
     "aday öğrenci",
     "kesin kayıt",
     "ek yerleştirme",
-    "kontenjan"
+    "kontenjan",
+    "takvim",
+    "kılavuz"
 ]
 
 DIPLOMA_KEYWORDS = [
@@ -46,10 +48,15 @@ NEGATIVE_KEYWORDS = [
     "akademik kadro",
     "iş ilanı",
     "yemek listesi",
-    "duyuru arşivi",
     "spor",
     "konferans",
     "sempozyum"
+]
+
+DATE_PATTERNS = [
+    r"\d{1,2}[./-]\d{1,2}[./-]\d{4}",
+    r"\d{1,2}\s*(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)\s*\d{4}",
+    r"\d{1,2}\s*-\s*\d{1,2}\s*(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)\s*\d{4}",
 ]
 
 UNIVERSITIES = [
@@ -127,9 +134,7 @@ def hash_text(text):
 
 
 def fetch_text(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 UniversityHunterBot"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 UniversityHunterBot"}
 
     response = requests.get(
         url,
@@ -157,7 +162,7 @@ def fetch_text(url):
         combined = f"{title} {href}"
         norm = normalize(combined)
 
-        if any(k in norm for k in MAIN_KEYWORDS + DIPLOMA_KEYWORDS):
+        if any(normalize(k) in norm for k in MAIN_KEYWORDS + DIPLOMA_KEYWORDS):
             links.append(combined)
 
     return text + " " + " ".join(links)
@@ -166,7 +171,7 @@ def fetch_text(url):
 def is_relevant(text):
     norm = normalize(text)
 
-    if any(k in norm for k in NEGATIVE_KEYWORDS):
+    if any(normalize(k) in norm for k in NEGATIVE_KEYWORDS):
         return False
 
     has_main = any(normalize(k) in norm for k in MAIN_KEYWORDS)
@@ -191,6 +196,19 @@ def extract_snippets(text):
                 snippets.append(clean)
 
     return snippets[:6]
+
+
+def extract_dates(text):
+    norm = normalize(text)
+    dates = []
+
+    for pattern in DATE_PATTERNS:
+        found = re.finditer(pattern, norm, flags=re.IGNORECASE)
+
+        for match in found:
+            dates.append(match.group(0))
+
+    return list(dict.fromkeys(dates))[:8]
 
 
 async def send_message(bot, text):
@@ -231,7 +249,9 @@ async def check_universities():
 
                 if is_relevant(text):
                     snippets = extract_snippets(text)
-                    message_basis = name + url + " ".join(snippets)
+                    dates = extract_dates(text)
+
+                    message_basis = name + url + " ".join(snippets) + " ".join(dates)
                     message_hash = hash_text(normalize(message_basis))
 
                     if message_hash not in sent_hashes:
@@ -241,6 +261,12 @@ async def check_universities():
                             f"📌 Konu: Uluslararası öğrenci / diploma ile başvuru\n"
                             f"🔗 {url}\n\n"
                         )
+
+                        if dates:
+                            msg += "📅 Bulunan tarihler:\n"
+                            for d in dates:
+                                msg += f"• {d}\n"
+                            msg += "\n"
 
                         if snippets:
                             msg += "Bulunan metin:\n"
