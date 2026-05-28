@@ -159,7 +159,7 @@ def alert_slots(result,state):
     now=time.time(); key=result['key']
     if now-last_alert_time_by_key.get(key,0)<ALERT_COOLDOWN: log(f'[{key}] ALERT COOLDOWN'); return
     changed,_=is_new_slot_event(state,result)
-    if not changed: log(f'[{key}] SAME SLOT ALREADY SEEN'); return
+    if not changed: log(f'[{key}] SAME SLOT ALREADY SEEN, ALERT AGAIN')
     slots=result['slots']; lines=[]
     for item in slots[:15]: lines.append(f"• {datetime.fromisoformat(item['date']).strftime('%d.%m.%Y')} — {item['count']}")
     msg=(f"🚨🚨🚨 СЛОТЫ НАЙДЕНЫ [{BOT_NAME}] 🚨🚨🚨\n🏷 {result['calendar_name']}\n📅 {result['month_title']}\n📍 Ближайшая дата: {datetime.fromisoformat(slots[0]['date']).strftime('%d.%m.%Y')}\nВсего дней с местами: {len(slots)}\n"+'\n'.join(lines)+f"\n👉 {result['url']}")
