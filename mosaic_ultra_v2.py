@@ -197,10 +197,9 @@ def alert_slots(result,state):
     if ENABLE_TURBO_AFTER_SLOT:
         turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT
 
-    for i in range(FLOOD_ALERT_COUNT):
+        for i in range(FLOOD_ALERT_COUNT):
         send_message(msg,False)
-        if i+1<FLOOD_ALERT_COUNT:
-            time.sleep(FLOOD_ALERT_DELAY)
+        if i+1<FLOOD_ALERT_COUNT: time.sleep(FLOOD_ALERT_DELAY)
 
     if SEND_HTML_ON_SLOT and result.get('snapshot'):
         send_document(result['snapshot'],'HTML snapshot найденного слота')
