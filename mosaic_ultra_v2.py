@@ -170,6 +170,7 @@ def alert_slots(result,state):
         lines.append(f"• {datetime.fromisoformat(item['date']).strftime('%d.%m.%Y')} — {item['count']}")
 
     visa_text=result['calendar_name'].lower()
+
     if 'student' in visa_text:
         visa_type='🎓 STUDENT'
     elif 'vip' in visa_text:
