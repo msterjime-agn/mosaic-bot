@@ -157,30 +157,53 @@ def is_new_slot_event(state,result):
 def alert_slots(result,state):
     global turbo_until
     now=time.time(); key=result['key']
-    if now-last_alert_time_by_key.get(key,0)<ALERT_COOLDOWN: log(f'[{key}] ALERT COOLDOWN'); return
+    if now-last_alert_time_by_key.get(key,0)<ALERT_COOLDOWN:
+        log(f'[{key}] ALERT COOLDOWN')
+        return
+
     changed,_=is_new_slot_event(state,result)
-    if not changed: log(f'[{key}] SAME SLOT ALREADY SEEN, ALERT AGAIN')
+    if not changed:
+        log(f'[{key}] SAME SLOT ALREADY SEEN, ALERT AGAIN')
+
     slots=result['slots']; lines=[]
-    for item in slots[:15]: lines.append(f"• {datetime.fromisoformat(item['date']).strftime('%d.%m.%Y')} — {item['count']}")
-    msg=(f"🚨🚨🚨 СЛОТЫ НАЙДЕНЫ [{BOT_NAME}] 🚨🚨🚨\n🏷 {result['calendar_name']}\n📅 {result['month_title']}\n📍 Ближайшая дата: {datetime.fromisoformat(slots[0]['date']).strftime('%d.%m.%Y')}\nВсего дней с местами: {len(slots)}\n"+'\n'.join(lines)+f"\n👉 {result['url']}")
+    for item in slots[:15]:
+        lines.append(f"• {datetime.fromisoformat(item['date']).strftime('%d.%m.%Y')} — {item['count']}")
+
+    visa_text=result['calendar_name'].lower()
+    if 'student' in visa_text:
+        visa_type='🎓 STUDENT'
+    elif 'vip' in visa_text:
+        visa_type='💎 VIP'
+    else:
+        visa_type='🟢 STANDARD'
+
+    msg=(f"{visa_type} | 🔥 СРОЧНО! 🚨🚨🚨 СЛОТЫ НАЙДЕНЫ [{BOT_NAME}] 🚨🚨🚨\n"
+         f"🏷 {result['calendar_name']}\n"
+         f"📅 {result['month_title']}\n"
+         f"📍 Ближайшая дата: {datetime.fromisoformat(slots[0]['date']).strftime('%d.%m.%Y')}\n"
+         f"Всего дней с местами: {len(slots)}\n"
+         + '\n'.join(lines)
+         + f"\n👉 {result['url']}")
+
     append_history({'time':datetime.now().isoformat(timespec='seconds'),'calendar':result['calendar_name'],'month':result['month_title'],'url':result['url'],'slots':slots,'snapshot':result.get('snapshot','')})
+
     if AUTO_OPEN_BROWSER_ON_SLOT:
-        try: webbrowser.open(result['url'])
-        except Exception as e: log(f'BROWSER OPEN ERROR: {e}')
-    if ENABLE_TURBO_AFTER_SLOT: turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT
-visa_text=result['calendar_name'].lower()
+        try:
+            webbrowser.open(result['url'])
+        except Exception as e:
+            log(f'BROWSER OPEN ERROR: {e}')
 
-if 'student' in visa_text:
-    visa_type='🎓 STUDENT'
-elif 'vip' in visa_text:
-    visa_type='💎 VIP'
-else:
-    visa_type='🟢 STANDARD'
+    if ENABLE_TURBO_AFTER_SLOT:
+        turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT
 
-for i in range(FLOOD_ALERT_COUNT):
-    send_message(f'{visa_type} | 🔥 СРОЧНО! '+msg,False)
-    if i+1<FLOOD_ALERT_COUNT: time.sleep(FLOOD_ALERT_DELAY)
-    if SEND_HTML_ON_SLOT and result.get('snapshot'): send_document(result['snapshot'],'HTML snapshot найденного слота')
+    for i in range(FLOOD_ALERT_COUNT):
+        send_message(msg,False)
+        if i+1<FLOOD_ALERT_COUNT:
+            time.sleep(FLOOD_ALERT_DELAY)
+
+    if SEND_HTML_ON_SLOT and result.get('snapshot'):
+        send_document(result['snapshot'],'HTML snapshot найденного слота')
+
     last_alert_time_by_key[key]=now
 
 def alert_error_once(result):
