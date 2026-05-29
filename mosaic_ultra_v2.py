@@ -201,7 +201,7 @@ if repeat_alert:
     if ENABLE_TURBO_AFTER_SLOT:
         turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT
 
-       alert_count = REPEAT_ALERT_COUNT if repeat_alert else FLOOD_ALERT_COUNT
+        alert_count = REPEAT_ALERT_COUNT if repeat_alert else FLOOD_ALERT_COUNT
 
 for i in range(alert_count):
     send_message(msg,False)
