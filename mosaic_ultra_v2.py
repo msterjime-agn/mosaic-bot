@@ -21,6 +21,7 @@ STATUS_INTERVAL=int(os.getenv('STATUS_INTERVAL','3600'))
 ALERT_COOLDOWN=int(os.getenv('ALERT_COOLDOWN','600'))
 ERROR_COOLDOWN=int(os.getenv('ERROR_COOLDOWN','1800'))
 FLOOD_ALERT_COUNT=int(os.getenv('FLOOD_ALERT_COUNT','7'))
+REPEAT_ALERT_COUNT=int(os.getenv('REPEAT_ALERT_COUNT','1'))
 FLOOD_ALERT_DELAY=float(os.getenv('FLOOD_ALERT_DELAY','3'))
 AUTO_OPEN_BROWSER_ON_SLOT=os.getenv('AUTO_OPEN_BROWSER_ON_SLOT','1')=='1'
 SEND_HTML_ON_SLOT=os.getenv('SEND_HTML_ON_SLOT','1')=='1'
@@ -162,8 +163,11 @@ def alert_slots(result,state):
         return
 
     changed,_=is_new_slot_event(state,result)
-    if not changed:
-        log(f'[{key}] SAME SLOT ALREADY SEEN, ALERT AGAIN')
+
+repeat_alert = not changed
+
+if repeat_alert:
+    log(f'[{key}] SAME SLOT ALREADY SEEN, REPEAT ALERT')
 
     slots=result['slots']; lines=[]
     for item in slots[:15]:
@@ -197,9 +201,13 @@ def alert_slots(result,state):
     if ENABLE_TURBO_AFTER_SLOT:
         turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT
 
-        for i in range(FLOOD_ALERT_COUNT):
-            send_message(msg,False)
-        if i+1<FLOOD_ALERT_COUNT: time.sleep(FLOOD_ALERT_DELAY)
+       alert_count = REPEAT_ALERT_COUNT if repeat_alert else FLOOD_ALERT_COUNT
+
+for i in range(alert_count):
+    send_message(msg,False)
+
+    if i+1<alert_count:
+        time.sleep(FLOOD_ALERT_DELAY)
 
     if SEND_HTML_ON_SLOT and result.get('snapshot'):
         send_document(result['snapshot'],'HTML snapshot найденного слота')
