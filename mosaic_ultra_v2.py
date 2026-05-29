@@ -158,6 +158,7 @@ def is_new_slot_event(state,result):
 def alert_slots(result,state):
     global turbo_until
     now=time.time(); key=result['key']
+
     if now-last_alert_time_by_key.get(key,0)<ALERT_COOLDOWN:
         log(f'[{key}] ALERT COOLDOWN')
         return
@@ -173,7 +174,6 @@ def alert_slots(result,state):
         lines.append(f"• {datetime.fromisoformat(item['date']).strftime('%d.%m.%Y')} — {item['count']}")
 
     visa_text=result['calendar_name'].lower()
-
     if 'student' in visa_text:
         visa_type='🎓 STUDENT'
     elif 'vip' in visa_text:
@@ -181,7 +181,8 @@ def alert_slots(result,state):
     else:
         visa_type='🟢 STANDARD'
 
-    msg=(f"{visa_type} | 🔥 СРОЧНО! 🚨🚨🚨 СЛОТЫ НАЙДЕНЫ [{BOT_NAME}] 🚨🚨🚨\n"
+    title='⏰ СЛОТЫ ВСЁ ЕЩЁ ОТКРЫТЫ' if repeat_alert else '🔥 СРОЧНО! 🚨🚨🚨 СЛОТЫ НАЙДЕНЫ'
+    msg=(f"{visa_type} | {title} [{BOT_NAME}]\n"
          f"🏷 {result['calendar_name']}\n"
          f"📅 {result['month_title']}\n"
          f"📍 Ближайшая дата: {datetime.fromisoformat(slots[0]['date']).strftime('%d.%m.%Y')}\n"
