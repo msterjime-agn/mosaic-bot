@@ -163,11 +163,10 @@ def alert_slots(result,state):
         return
 
     changed,_=is_new_slot_event(state,result)
+    repeat_alert=not changed
 
-repeat_alert = not changed
-
-if repeat_alert:
-    log(f'[{key}] SAME SLOT ALREADY SEEN, REPEAT ALERT')
+    if repeat_alert:
+        log(f'[{key}] SAME SLOT ALREADY SEEN, REPEAT ALERT')
 
     slots=result['slots']; lines=[]
     for item in slots[:15]:
@@ -201,13 +200,12 @@ if repeat_alert:
     if ENABLE_TURBO_AFTER_SLOT:
         turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT
 
-        alert_count = REPEAT_ALERT_COUNT if repeat_alert else FLOOD_ALERT_COUNT
+    alert_count=REPEAT_ALERT_COUNT if repeat_alert else FLOOD_ALERT_COUNT
 
-for i in range(alert_count):
-    send_message(msg,False)
-
-    if i+1<alert_count:
-        time.sleep(FLOOD_ALERT_DELAY)
+    for i in range(alert_count):
+        send_message(msg,False)
+        if i+1<alert_count:
+            time.sleep(FLOOD_ALERT_DELAY)
 
     if SEND_HTML_ON_SLOT and result.get('snapshot'):
         send_document(result['snapshot'],'HTML snapshot найденного слота')
