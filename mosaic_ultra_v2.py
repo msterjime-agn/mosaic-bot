@@ -379,6 +379,17 @@ def handle_command(text,state):
     elif cmd=='/months': send_message('📅 Проверяемые месяцы:\n'+'\n'.join([m[1] for m in months_to_check()]))
     elif cmd=='/history': send_message('📊 Последние слоты:\n'+last_history())
     elif cmd=='/turbo': turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT; send_message(f'🔥 TURBO включён на {TURBO_SECONDS_AFTER_SLOT} сек.')
+        elif cmd=='/testvip':
+    send_message('🧪 TEST VIP: 12 Telegram + Email + браузер', False)
+    alert_slots(make_test_result('VIP'), state)
+
+elif cmd=='/teststandard':
+    send_message('🧪 TEST STANDARD: 5 Telegram', False)
+    alert_slots(make_test_result('STANDARD'), state)
+
+elif cmd=='/teststudent':
+    send_message('🧪 TEST STUDENT: 2 Telegram', False)
+    alert_slots(make_test_result('STUDENT'), state)
     elif cmd=='/status':
         st=state.get('last_stats',{})
         send_message(f"ℹ️ STATUS NOW [{BOT_NAME}]\nПауза: {'да' if paused else 'нет'}\nTurbo: {'да' if time.time()<turbo_until else 'нет'}\nПоследний круг: {state.get('last_circle_time','-')}\nПроверок: {sum(st.values())}\nСлоты: {st.get('SLOTS_FOUND',0)}\nБез мест: {st.get('ZERO_SLOTS',0)}\nПустые: {st.get('EMPTY_MONTH',0)}\nОшибки: {st.get('ERROR',0)+st.get('HTTP_ERROR',0)+st.get('UNKNOWN',0)}")
