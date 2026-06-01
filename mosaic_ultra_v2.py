@@ -94,12 +94,10 @@ def send_email_alert(subject, body):
         msg['To'] = EMAIL_TO
         msg['Subject'] = subject
         msg.set_content(body)
-
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as s:
             s.starttls()
             s.login(SMTP_USER, SMTP_PASSWORD)
             s.send_message(msg)
-
         log(f'EMAIL SENT: {subject} -> {EMAIL_TO}')
         return True
     except Exception as e:
@@ -369,31 +367,59 @@ def make_test_result(kind):
         return {'calendar_name':'Ashgabat','month_title':'TEST MONTH','month_value':'TEST','url':'https://appointment.mosaicvisa.com/calendar/11?month=TEST','slots':[{'date':today_iso,'text':'TEST STANDARD','count':8}],'snapshot':'','key':'Ashgabat / TEST MONTH'}
     return {'calendar_name':'Ashgabat Student Visa','month_title':'TEST MONTH','month_value':'TEST','url':'https://appointment.mosaicvisa.com/calendar/20?month=TEST','slots':[{'date':today_iso,'text':'TEST STUDENT','count':30}],'snapshot':'','key':'Ashgabat Student Visa / TEST MONTH'}
 
-def command_text(): return 'Команды:\n/status — статус\n/pause — пауза\n/resume — продолжить\n/months — месяцы проверки\n/history — последние найденные слоты\n/turbo — ускорить на 5 минут\n/testvip — тест VIP 12 Telegram + Email + браузер\n/teststandard — тест Standard 5 Telegram\n/teststudent — тест Student 2 Telegram\n/help — команды'
+def command_text():
+    return 'Команды:\n/status — статус\n/pause — пауза\n/resume — продолжить\n/months — месяцы проверки\n/history — последние найденные слоты\n/turbo — ускорить на 5 минут\n/testvip — тест VIP 12 Telegram + Email + браузер\n/teststandard — тест Standard 5 Telegram\n/teststudent — тест Student 2 Telegram\n/help — команды'
 
 def handle_command(text,state):
-    global paused,turbo_until
-    cmd=text.strip().split()[0].lower()
-    if cmd=='/pause': paused=True; send_message('⏸ Бот поставлен на паузу.')
-    elif cmd=='/resume': paused=False; send_message('▶️ Бот продолжает проверку.')
-    elif cmd=='/months': send_message('📅 Проверяемые месяцы:\n'+'\n'.join([m[1] for m in months_to_check()]))
-    elif cmd=='/history': send_message('📊 Последние слоты:\n'+last_history())
-    elif cmd=='/turbo': turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT; send_message(f'🔥 TURBO включён на {TURBO_SECONDS_AFTER_SLOT} сек.')
-        elif cmd=='/testvip':
-    send_message('🧪 TEST VIP: 12 Telegram + Email + браузер', False)
-    alert_slots(make_test_result('VIP'), state)
+    global paused, turbo_until
+    cmd = text.strip().split()[0].lower()
 
-elif cmd=='/teststandard':
-    send_message('🧪 TEST STANDARD: 5 Telegram', False)
-    alert_slots(make_test_result('STANDARD'), state)
+    if cmd == '/pause':
+        paused = True
+        send_message('⏸ Бот поставлен на паузу.')
 
-elif cmd=='/teststudent':
-    send_message('🧪 TEST STUDENT: 2 Telegram', False)
-    alert_slots(make_test_result('STUDENT'), state)
-    elif cmd=='/status':
-        st=state.get('last_stats',{})
-        send_message(f"ℹ️ STATUS NOW [{BOT_NAME}]\nПауза: {'да' if paused else 'нет'}\nTurbo: {'да' if time.time()<turbo_until else 'нет'}\nПоследний круг: {state.get('last_circle_time','-')}\nПроверок: {sum(st.values())}\nСлоты: {st.get('SLOTS_FOUND',0)}\nБез мест: {st.get('ZERO_SLOTS',0)}\nПустые: {st.get('EMPTY_MONTH',0)}\nОшибки: {st.get('ERROR',0)+st.get('HTTP_ERROR',0)+st.get('UNKNOWN',0)}")
-    elif cmd=='/help': send_message(command_text())
+    elif cmd == '/resume':
+        paused = False
+        send_message('▶️ Бот продолжает проверку.')
+
+    elif cmd == '/months':
+        send_message('📅 Проверяемые месяцы:\n' + '\n'.join([m[1] for m in months_to_check()]))
+
+    elif cmd == '/history':
+        send_message('📊 Последние слоты:\n' + last_history())
+
+    elif cmd == '/turbo':
+        turbo_until = time.time() + TURBO_SECONDS_AFTER_SLOT
+        send_message(f'🔥 TURBO включён на {TURBO_SECONDS_AFTER_SLOT} сек.')
+
+    elif cmd == '/testvip':
+        send_message('🧪 TEST VIP: 12 Telegram + Email + браузер', False)
+        alert_slots(make_test_result('VIP'), state)
+
+    elif cmd == '/teststandard':
+        send_message('🧪 TEST STANDARD: 5 Telegram', False)
+        alert_slots(make_test_result('STANDARD'), state)
+
+    elif cmd == '/teststudent':
+        send_message('🧪 TEST STUDENT: 2 Telegram', False)
+        alert_slots(make_test_result('STUDENT'), state)
+
+    elif cmd == '/status':
+        st = state.get('last_stats', {})
+        send_message(
+            f"ℹ️ STATUS NOW [{BOT_NAME}]\n"
+            f"Пауза: {'да' if paused else 'нет'}\n"
+            f"Turbo: {'да' if time.time() < turbo_until else 'нет'}\n"
+            f"Последний круг: {state.get('last_circle_time','-')}\n"
+            f"Проверок: {sum(st.values())}\n"
+            f"Слоты: {st.get('SLOTS_FOUND',0)}\n"
+            f"Без мест: {st.get('ZERO_SLOTS',0)}\n"
+            f"Пустые: {st.get('EMPTY_MONTH',0)}\n"
+            f"Ошибки: {st.get('ERROR',0)+st.get('HTTP_ERROR',0)+st.get('UNKNOWN',0)}"
+        )
+
+    elif cmd == '/help':
+        send_message(command_text())
 
 def command_loop(state):
     global last_update_id
