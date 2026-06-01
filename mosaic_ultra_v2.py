@@ -4,10 +4,12 @@ from datetime import datetime, date
 from html import unescape
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
+import smtplib
+from email.message import EmailMessage
 
 TOKEN=os.getenv('TOKEN','8574441866:AAEB-iMe93NyoyECEuVYkyDWONbkdyJub50')
 CHAT_ID=os.getenv('CHAT_ID','-1003682526875')
-BOT_NAME=os.getenv('BOT_NAME','MOSAIC-ULTRA-SMS-PRIORITY')
+BOT_NAME=os.getenv('BOT_NAME','MOSAIC-ULTRA-FINAL')
 CALENDARS={'Ashgabat':11,'Ashgabat VIP':12,'Ashgabat Student Visa':20}
 MONTHS_AHEAD=int(os.getenv('MONTHS_AHEAD','8'))
 MAX_WORKERS=int(os.getenv('MAX_WORKERS','9'))
@@ -23,9 +25,17 @@ ERROR_COOLDOWN=int(os.getenv('ERROR_COOLDOWN','1800'))
 FLOOD_ALERT_COUNT=int(os.getenv('FLOOD_ALERT_COUNT','7'))
 REPEAT_ALERT_COUNT=int(os.getenv('REPEAT_ALERT_COUNT','1'))
 FLOOD_ALERT_DELAY=float(os.getenv('FLOOD_ALERT_DELAY','3'))
-STUDENT_SMS_COUNT=int(os.getenv('STUDENT_SMS_COUNT','3'))
-STANDARD_SMS_COUNT=int(os.getenv('STANDARD_SMS_COUNT','7'))
+STUDENT_SMS_COUNT=int(os.getenv('STUDENT_SMS_COUNT','2'))
+STANDARD_SMS_COUNT=int(os.getenv('STANDARD_SMS_COUNT','5'))
 VIP_SMS_COUNT=int(os.getenv('VIP_SMS_COUNT','12'))
+EMAIL_ENABLED=os.getenv('EMAIL_ENABLED','0')=='1'
+EMAIL_ON_VIP=os.getenv('EMAIL_ON_VIP','1')=='1'
+EMAIL_ON_STANDARD=os.getenv('EMAIL_ON_STANDARD','0')=='1'
+SMTP_HOST=os.getenv('SMTP_HOST','smtp.gmail.com')
+SMTP_PORT=int(os.getenv('SMTP_PORT','587'))
+SMTP_USER=os.getenv('SMTP_USER','').strip()
+SMTP_PASSWORD=os.getenv('SMTP_PASSWORD','').strip()
+EMAIL_TO=os.getenv('EMAIL_TO','').strip()
 AUTO_OPEN_BROWSER_ON_SLOT=os.getenv('AUTO_OPEN_BROWSER_ON_SLOT','1')=='1'
 PRIORITY_ALERTS=os.getenv('PRIORITY_ALERTS','1')=='1'
 VIP_POPUP=os.getenv('VIP_POPUP','1')=='1'
@@ -71,6 +81,30 @@ def send_document(path,caption=''):
         with open(path,'rb') as f: r=tg('sendDocument',{'chat_id':CHAT_ID,'caption':caption},{'document':f},60)
         return bool(r and r.ok)
     except Exception as e: log(f'SEND DOCUMENT ERROR: {e}'); return False
+
+def send_email_alert(subject, body):
+    if not EMAIL_ENABLED:
+        return False
+    if not SMTP_USER or not SMTP_PASSWORD or not EMAIL_TO:
+        log('EMAIL SKIP: SMTP_USER / SMTP_PASSWORD / EMAIL_TO not configured')
+        return False
+    try:
+        msg = EmailMessage()
+        msg['From'] = SMTP_USER
+        msg['To'] = EMAIL_TO
+        msg['Subject'] = subject
+        msg.set_content(body)
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as s:
+            s.starttls()
+            s.login(SMTP_USER, SMTP_PASSWORD)
+            s.send_message(msg)
+
+        log(f'EMAIL SENT: {subject} -> {EMAIL_TO}')
+        return True
+    except Exception as e:
+        log(f'EMAIL ERROR: {e}')
+        return False
 
 def load_state():
     try: return json.loads(STATE_FILE.read_text(encoding='utf-8')) if STATE_FILE.exists() else {'seen_slots':{},'last_stats':{},'last_circle_time':''}
@@ -180,10 +214,10 @@ def calendar_kind(name):
 
 def priority_settings(kind):
     if kind=='VIP':
-        return {'label':'🔴🔴🔴 VIP SLOT FOUND','telegram_prefix':'🔴 VIP','popup':VIP_POPUP,'sound':VIP_SOUND,'open_browser':VIP_OPEN_BROWSER,'cooldown':VIP_COOLDOWN,'flood':FLOOD_ALERT_COUNT}
+        return {'label':'🔴🔴🔴 VIP SLOT FOUND','telegram_prefix':'🔴 VIP','popup':VIP_POPUP,'sound':VIP_SOUND,'open_browser':VIP_OPEN_BROWSER,'cooldown':VIP_COOLDOWN,'flood':VIP_SMS_COUNT}
     if kind=='STANDARD':
-        return {'label':'🟡 STANDARD SLOT FOUND','telegram_prefix':'🟡 STANDARD','popup':STANDARD_POPUP,'sound':STANDARD_SOUND,'open_browser':STANDARD_OPEN_BROWSER,'cooldown':STANDARD_COOLDOWN,'flood':max(2,min(3,FLOOD_ALERT_COUNT))}
-    return {'label':'🟢 STUDENT SLOT FOUND','telegram_prefix':'🟢 STUDENT','popup':False,'sound':False,'open_browser':STUDENT_OPEN_BROWSER,'cooldown':STUDENT_COOLDOWN,'flood':1}
+        return {'label':'🟡 STANDARD SLOT FOUND','telegram_prefix':'🟡 STANDARD','popup':STANDARD_POPUP,'sound':STANDARD_SOUND,'open_browser':STANDARD_OPEN_BROWSER,'cooldown':STANDARD_COOLDOWN,'flood':STANDARD_SMS_COUNT}
+    return {'label':'🟢 STUDENT SLOT FOUND','telegram_prefix':'🟢 STUDENT','popup':False,'sound':False,'open_browser':STUDENT_OPEN_BROWSER,'cooldown':STUDENT_COOLDOWN,'flood':STUDENT_SMS_COUNT}
 
 def alert_sound(kind):
     if os.name!='nt':
@@ -282,6 +316,13 @@ def alert_slots(result,state):
 
     alert_count=REPEAT_ALERT_COUNT if repeat_alert else settings['flood']
 
+    if (not repeat_alert) and EMAIL_ENABLED:
+        if ('vip' in visa_text and EMAIL_ON_VIP) or ('vip' not in visa_text and 'student' not in visa_text and EMAIL_ON_STANDARD):
+            email_subject = f"{visa_type} SLOT FOUND - {result['calendar_name']}"
+            email_body = msg.replace('\n👉 ', '\n\nLink: ')
+            if send_email_alert(email_subject, email_body):
+                log('EMAIL ALERT SENT')
+
     for i in range(alert_count):
         send_message(msg,False)
         if i+1<alert_count:
@@ -328,7 +369,7 @@ def make_test_result(kind):
         return {'calendar_name':'Ashgabat','month_title':'TEST MONTH','month_value':'TEST','url':'https://appointment.mosaicvisa.com/calendar/11?month=TEST','slots':[{'date':today_iso,'text':'TEST STANDARD','count':8}],'snapshot':'','key':'Ashgabat / TEST MONTH'}
     return {'calendar_name':'Ashgabat Student Visa','month_title':'TEST MONTH','month_value':'TEST','url':'https://appointment.mosaicvisa.com/calendar/20?month=TEST','slots':[{'date':today_iso,'text':'TEST STUDENT','count':30}],'snapshot':'','key':'Ashgabat Student Visa / TEST MONTH'}
 
-def command_text(): return 'Команды:\n/status — статус\n/pause — пауза\n/resume — продолжить\n/months — месяцы проверки\n/history — последние найденные слоты\n/turbo — ускорить на 5 минут\n/testvip — тест 12 VIP сообщений\n/teststandard — тест 7 Standard сообщений\n/teststudent — тест 3 Student сообщения\n/help — команды'
+def command_text(): return 'Команды:\n/status — статус\n/pause — пауза\n/resume — продолжить\n/months — месяцы проверки\n/history — последние найденные слоты\n/turbo — ускорить на 5 минут\n/testvip — тест VIP 12 Telegram + Email + браузер\n/teststandard — тест Standard 5 Telegram\n/teststudent — тест Student 2 Telegram\n/help — команды'
 
 def handle_command(text,state):
     global paused,turbo_until
@@ -359,7 +400,7 @@ def command_loop(state):
 
 def main():
     global turbo_until
-    log(f'🚀 BOT START {BOT_NAME}'); send_message(f'✅ ULTRA SMS PRIORITY режим: бот запущен ({BOT_NAME})\n🟢 Student: {STUDENT_SMS_COUNT} сообщений\n🟡 Standard: {STANDARD_SMS_COUNT} сообщений\n🔴 VIP: {VIP_SMS_COUNT} сообщений\n{command_text()}',False)
+    log(f'🚀 BOT START {BOT_NAME}'); send_message(f'✅ ULTRA FINAL режим: бот запущен ({BOT_NAME})\n🔴 VIP: {VIP_SMS_COUNT} Telegram + Email + браузер\n🟡 Standard: {STANDARD_SMS_COUNT} Telegram\n🟢 Student: {STUDENT_SMS_COUNT} Telegram\nEmail: {"вкл" if EMAIL_ENABLED else "выкл"}\n{command_text()}',False)
     state=load_state()
     if ENABLE_COMMANDS: threading.Thread(target=command_loop,args=(state,),daemon=True).start()
     while True:
