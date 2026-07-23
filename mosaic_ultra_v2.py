@@ -26,7 +26,7 @@ STUDENT_SMS_COUNT=int(os.getenv('STUDENT_SMS_COUNT','2'))
 STANDARD_SMS_COUNT=int(os.getenv('STANDARD_SMS_COUNT','5'))
 VIP_SMS_COUNT=int(os.getenv('VIP_SMS_COUNT','12'))
 CONFIRM_BEFORE_ALERT=os.getenv('CONFIRM_BEFORE_ALERT','1')=='1'
-MAX_SLOT_COUNT=int(os.getenv('MAX_SLOT_COUNT','60'))  # больше этого — почти наверняка не 'свободно', а Reserved/вместимость
+MAX_SLOT_COUNT=int(os.getenv('MAX_SLOT_COUNT','2000'))  # аварийный предел; настоящий фильтр — кликабельность дня
 SIGNAL_ON_RESERVED=os.getenv('SIGNAL_ON_RESERVED','1')=='1'   # сигналить, когда меняется 'занято' (движение брони)
 SIGNAL_HOT_COOLDOWN=int(os.getenv('SIGNAL_HOT_COOLDOWN','120'))  # для важных сигналов (месяц открыли/дни добавили)
 SIGNAL_COOLDOWN=int(os.getenv('SIGNAL_COOLDOWN','900'))
@@ -168,7 +168,7 @@ def parse_calendar_rows(html):
         out[iso]={'r':rem,'v':resv,'c':('cursor: pointer' in tag.lower())}
     return out
 
-def parse_slots(html,year_hint):
+def parse_slots(html,year_hint,label=''):
     """ТОЧНЫЙ парсинг календаря Mosaic по атрибутам строки таблицы:
         <tr data-date-formatted="28.07.2026" data-date="2026-07-28" data-remaining="1"
             class="calendar-dates" style="cursor: pointer...">
@@ -178,7 +178,7 @@ def parse_slots(html,year_hint):
     В видимой ячейке сайт пишет "Reserved N" — это СКОЛЬКО ЗАНЯТО.
     Старая версия читала это "Reserved" и слала фантомы (229 мест при нуле на сайте).
     """
-    today=date.today(); res={}; rows_seen=0
+    today=date.today(); res={}; hidden={}; rows_seen=0
     for m in re.finditer(r'<tr\b[^>]*>', html, flags=re.I|re.S):
         tag=m.group(0)
         if 'calendar-dates' not in tag: continue
@@ -192,16 +192,25 @@ def parse_slots(html,year_hint):
         try: dt=date.fromisoformat(iso)
         except Exception: continue
         if dt<today or cnt<=0: continue
-        if cnt>MAX_SLOT_COUNT:
-            log(f'SUSPICIOUS data-remaining={cnt} for {iso} — игнорирую'); continue
+        clickable=('cursor: pointer' in tag.lower())
         fm=re.search(r'data-date-formatted\s*=\s*"([^"]*)"', tag)
-        res[iso]={'date':iso,'text':(fm.group(1) if fm else iso),'count':cnt,
-                  'clickable':('cursor: pointer' in tag.lower())}
+        label=(fm.group(1) if fm else iso)
+        if not clickable:
+            # Мест указано, но день ЗАКРЫТ (нельзя выбрать) — это загруженная вместимость,
+            # а не свободные места. Записаться нельзя. Но это сильный ранний признак:
+            # админы готовят месяц. Отдаём отдельно, в ранние сигналы.
+            hidden[iso]={'date':iso,'text':label,'count':cnt}
+            log(f'HAZIRLIK [{label or "?"}] {iso}: {cnt} yer yüklü ama gün KAPALI — randevu bildirimi yok')
+            continue
+        if cnt>MAX_SLOT_COUNT:
+            log(f'BÜYÜK AÇILIŞ [{label or "?"}] {iso}: {cnt} yer ve gün AÇIK — bildiriyorum')
+        res[iso]={'date':iso,'text':label,'count':cnt,'clickable':True}
+    parse_slots.last_hidden=hidden
     if rows_seen:
         entries=sorted(res.values(), key=lambda x:x['date'])
         return entries, clean_html(html)
     # запасной вариант: разметка сайта изменилась — разбираем текстом по блокам дней
-    log('CALENDAR ROWS NOT FOUND — запасной текстовый парсер')
+    log(f'CALENDAR ROWS NOT FOUND [{label or "?"}] — запасной текстовый парсер')
     return _parse_slots_text(html,year_hint), clean_html(html)
 
 def _find_date_tokens(text):
@@ -234,8 +243,8 @@ def _parse_slots_text(html,year_hint):
         if 0<c<=MAX_SLOT_COUNT: res[iso]={'date':iso,'text':dtxt.strip(),'count':c,'clickable':True}
     return sorted(res.values(), key=lambda x:x['date'])
 
-def detect_state(html,year_hint):
-    text=clean_html(html); low=text.lower(); slots,_=parse_slots(html,year_hint)
+def detect_state(html,year_hint,label=''):
+    text=clean_html(html); low=text.lower(); slots,_=parse_slots(html,year_hint,label)
     if slots: return 'SLOTS_FOUND',slots,text
     if 'calendar-dates' in html: return 'ZERO_SLOTS',[],text
     if re.search(r'Reserved[^0-9]{0,25}\d',text,flags=re.I) or re.search(r'\b\d{1,2}\s+[A-Za-z]{3,9}\b',text): return 'ZERO_SLOTS',[],text
@@ -252,10 +261,11 @@ def check_one(task):
     try:
         html,status=fetch(url)
         if status!=200: return {'ok':False,'state':'HTTP_ERROR','key':key,'url':url,'error':f'HTTP {status}','slots':[],'calendar_name':name,'month_title':mt,'month_value':mv}
-        st,slots,text=detect_state(html,y); snap=save_snapshot(f'{name}_{mv}_{st}',html) if st in ('SLOTS_FOUND','UNKNOWN') else ''
+        st,slots,text=detect_state(html,y,key); snap=save_snapshot(f'{name}_{mv}_{st}',html) if st in ('SLOTS_FOUND','UNKNOWN') else ''
         day_links=extract_day_links(html) if st=='SLOTS_FOUND' else {}
         cal=parse_calendar_rows(html)
-        return {'ok':st!='UNKNOWN','state':st,'key':key,'url':url,'error':'','slots':slots,'snapshot':snap,'day_links':day_links,'cal':cal,'calendar_name':name,'month_title':mt,'month_value':mv}
+        hidden=getattr(parse_slots,'last_hidden',{}) or {}
+        return {'ok':st!='UNKNOWN','state':st,'key':key,'url':url,'error':'','slots':slots,'snapshot':snap,'day_links':day_links,'cal':cal,'hidden':hidden,'calendar_name':name,'month_title':mt,'month_value':mv}
     except Exception as e: return {'ok':False,'state':'ERROR','key':key,'url':url,'error':str(e),'slots':[],'calendar_name':name,'month_title':mt,'month_value':mv}
 
 def build_tasks():
@@ -340,6 +350,16 @@ def early_signal(result,state):
         save_state(state); return               # слоты есть — про них скажет alert_slots
 
     hot=[]; soft=[]
+    # Дни с загруженной вместимостью, но ещё ЗАКРЫТЫЕ — сильный признак подготовки месяца
+    hid=result.get('hidden') or {}
+    prev_hid=state.setdefault('hidden_fp',{}).get(key,{})
+    state['hidden_fp'][key]={d:v['count'] for d,v in hid.items()}
+    for d in sorted(hid.keys()):
+        c=hid[d]['count']; pc=prev_hid.get(d)
+        if pc is None:
+            hot.append(f"{fmt_date(d)}: загружено {c} мест, день пока ЗАКРЫТ")
+        elif pc!=c:
+            soft.append(f"{fmt_date(d)}: вместимость {pc} → {c} (день закрыт)")
     prev_days=set(prev.keys()); cur_days=set(cur.keys())
     added=cur_days-prev_days
     if not prev_days and cur_days:
@@ -368,7 +388,7 @@ def early_signal(result,state):
     head="🔥🟡 РАННИЙ СИГНАЛ" if hot else "🟡 MOSAIC SIGNAL"
     send_message(f"{head} [{BOT_NAME}]\n{emoji} {tier}\n🏷 {result['calendar_name']}\n📅 {result['month_title']}\n"
                  f"📊 Календарь зашевелился:\n   • "+"\n   • ".join(lines)+
-                 f"\n👀 Свободных мест пока нет — сайт готовит месяц\n👉 {result['url']}", False)
+                 f"\n👀 Записаться пока нельзя — сайт готовит месяц\n👉 {result['url']}", False)
 
 def reverify(result):
     """Повторно открываем ту же страницу и смотрим, на месте ли места.
@@ -488,7 +508,31 @@ def send_hourly_status(stats,state=None):
          f"🔥 Со слотами: {stats.get('SLOTS_FOUND',0)}\n0️⃣ Дни есть, мест нет: {stats.get('ZERO_SLOTS',0)}\n⬜ Пустые месяцы: {stats.get('EMPTY_MONTH',0)}\n⚠️ Ошибки/unknown: {stats.get('ERROR',0)+stats.get('HTTP_ERROR',0)+stats.get('UNKNOWN',0)}\n🤖 Бот работает")
     if send_message(msg,True): last_status_time=now
 
-def command_text(): return 'Команды:\n/status — статус\n/pause — пауза\n/resume — продолжить\n/months — месяцы проверки\n/history — последние найденные слоты\n/turbo — ускорить на 5 минут\n/help — команды'
+def do_full_scan():
+    """Немедленный обход всех календарей: что ОТКРЫТО, что подготовлено но ЗАКРЫТО.
+    Отвечает на вопрос 'не пропускаем ли мы VIP'."""
+    send_message(f"🔍 Полная проверка запущена [{BOT_NAME}]...", True)
+    open_rows=[]; hidden_rows=[]; errors=0
+    tasks=build_tasks()
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+        for fut in as_completed({ex.submit(check_one,t):t for t in tasks}):
+            try: r=fut.result()
+            except Exception: errors+=1; continue
+            if r['state'] in ('ERROR','HTTP_ERROR'): errors+=1; continue
+            emoji,tier,_=tier_of(r['calendar_name'])
+            for s in r.get('slots',[]):
+                open_rows.append(f"{emoji} {r['calendar_name']} / {r['month_title']}: {fmt_date(s['date'])} — {s['count']} мест ✅ОТКРЫТ")
+            for d,v in (r.get('hidden') or {}).items():
+                hidden_rows.append(f"{emoji} {r['calendar_name']} / {r['month_title']}: {fmt_date(d)} — {v['count']} мест 🔒закрыт")
+    parts=[f"🔍 РЕЗУЛЬТАТ ПРОВЕРКИ [{BOT_NAME}]", f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"]
+    parts.append(f"\n✅ ОТКРЫТЫЕ (можно записаться): {len(open_rows)}")
+    parts += (sorted(open_rows)[:25] or ["   — нет"])
+    parts.append(f"\n🔒 ПОДГОТОВЛЕНЫ, НО ЗАКРЫТЫ: {len(hidden_rows)}")
+    parts += (sorted(hidden_rows)[:25] or ["   — нет"])
+    if errors: parts.append(f"\n⚠️ Ошибок при проверке: {errors}")
+    send_message("\n".join(parts), False)
+
+def command_text(): return 'Команды:\n/scan — проверить всё сейчас (открытые + закрытые)\n/status — статус\n/pause — пауза\n/resume — продолжить\n/months — месяцы проверки\n/history — последние найденные слоты\n/turbo — ускорить на 5 минут\n/help — команды'
 
 def handle_command(text,state):
     global paused,turbo_until
@@ -501,6 +545,8 @@ def handle_command(text,state):
     elif cmd=='/status':
         st=state.get('last_stats',{})
         send_message(f"ℹ️ STATUS NOW [{BOT_NAME}]\nПауза: {'да' if paused else 'нет'}\nTurbo: {'да' if time.time()<turbo_until else 'нет'}\nПоследний круг: {state.get('last_circle_time','-')}\nПоследнее изменение: {state.get('last_change_time','-') or '-'}\nПроверок: {sum(st.values())}\nСлоты: {st.get('SLOTS_FOUND',0)}\nБез мест: {st.get('ZERO_SLOTS',0)}\nПустые: {st.get('EMPTY_MONTH',0)}\nОшибки: {st.get('ERROR',0)+st.get('HTTP_ERROR',0)+st.get('UNKNOWN',0)}\n📋 Известные слоты:\n{known_slots_summary(state)}")
+    elif cmd=='/scan':
+        threading.Thread(target=do_full_scan, daemon=True).start()
     elif cmd=='/help': send_message(command_text())
 
 def command_loop(state):
