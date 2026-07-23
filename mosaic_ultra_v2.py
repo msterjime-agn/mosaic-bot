@@ -278,8 +278,12 @@ def is_new_slot_event(state,result):
 
 def tier_of(calendar_name):
     n=calendar_name.lower()
-    if 'student' in n: return '🟢','STUDENT',STUDENT_SMS_COUNT
-    if 'vip' in n: return '🔴','VIP',VIP_SMS_COUNT
+    # Цвета строго по категориям:
+    # VIP = красный, Student = зелёный, Standard = жёлтый
+    if 'vip' in n:
+        return '🔴','VIP',VIP_SMS_COUNT
+    if 'student' in n:
+        return '🟢','STUDENT',STUDENT_SMS_COUNT
     return '🟡','STANDARD',STANDARD_SMS_COUNT
 
 def fmt_date(iso):
@@ -374,6 +378,11 @@ def early_signal(result,state):
             soft.append(f"{fmt_date(d)}: занято {a['v']} → {b['v']}")
     if not hot and not soft and prev_state==st:
         save_state(state); return
+
+    # Любое изменение календарного состояния фиксируем в журнале,
+    # даже если свободных мест ещё нет.
+    if not hot and not soft and prev_state!=st:
+        hot.append(f"состояние сайта изменилось: {prev_state} → {st}")
     now=time.time()
     cd = SIGNAL_HOT_COOLDOWN if hot else SIGNAL_COOLDOWN
     if now-last_signal_time_by_key.get(key,0)<cd:
@@ -412,6 +421,8 @@ def alert_slots(result,state):
     #  Слот исчез        → одно сообщение
     increased={d:(o,n) for d,(o,n) in changed.items() if n>o}
     decreased={d:(o,n) for d,(o,n) in changed.items() if n<o}
+    # Новые слоты и увеличение количества мест = обязательно уведомление.
+    # Уменьшение количества мест никогда не отправляет SMS.
     urgent = bool(new_dates) or bool(increased)
     if not (urgent or removed):
         # только уменьшение (или ничего) — молча зафиксировать
