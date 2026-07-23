@@ -456,9 +456,18 @@ def alert_slots(result,state):
             if still: confirm_note=f'\n✅ Подтверждено повторной проверкой ({len(still)} дн.)'
             else: confirm_note='\n⚠️ При повторной проверке мест уже НЕ видно — вероятно, заняли за секунды'
     
-    if new_dates: header=f"🚨🚨🚨 {emoji} {tier} | НОВЫЕ СЛОТЫ 🚨🚨🚨"
-    elif increased: header=f"📈🚨 {emoji} {tier} | БОЛЬШЕ МЕСТ 🚨"
-    else: header=f"{emoji} {tier} | СЛОТЫ ИСЧЕЗЛИ"
+    if new_dates:
+        if tier == 'VIP':
+            header=f"🚨🚨🚨 {emoji} {tier} | НОВЫЕ СЛОТЫ 🚨🚨🚨"
+        else:
+            header=f"{emoji} {tier} | НОВЫЕ СЛОТЫ"
+    elif increased:
+        if tier == 'VIP':
+            header=f"📈🚨 {emoji} {tier} | БОЛЬШЕ МЕСТ 🚨"
+        else:
+            header=f"📈 {emoji} {tier} | БОЛЬШЕ МЕСТ"
+    else:
+        header=f"{emoji} {tier} | СЛОТЫ ИСЧЕЗЛИ"
     nearest=f"\n📍 Ближайшая дата: {fmt_date(slots[0]['date'])}" if slots else ''
     msg=(f"{header} [{BOT_NAME}]\n🏷 {result['calendar_name']}\n📅 {result['month_title']}{nearest}\nВсего дней с местами: {len(slots)}\n"+'\n'.join(lines[:20])+confirm_note+f"\n👉 {result['url']}")
     append_history({'time':datetime.now().isoformat(timespec='seconds'),'calendar':result['calendar_name'],'month':result['month_title'],'url':result['url'],'slots':slots,'new':new_dates,'changed':{d:list(v) for d,v in changed.items()},'removed':removed,'snapshot':result.get('snapshot','')})
