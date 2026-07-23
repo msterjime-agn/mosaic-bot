@@ -25,6 +25,7 @@ FLOOD_ALERT_DELAY=float(os.getenv('FLOOD_ALERT_DELAY','3'))
 STUDENT_SMS_COUNT=int(os.getenv('STUDENT_SMS_COUNT','2'))
 STANDARD_SMS_COUNT=int(os.getenv('STANDARD_SMS_COUNT','5'))
 VIP_SMS_COUNT=int(os.getenv('VIP_SMS_COUNT','12'))
+VIP_INCREASE_REPEATS=int(os.getenv('VIP_INCREASE_REPEATS','3'))
 SIGNAL_COOLDOWN=int(os.getenv('SIGNAL_COOLDOWN','900'))
 MIN_CHANGE_ALERT_GAP=int(os.getenv('MIN_CHANGE_ALERT_GAP','60'))
 AUTO_OPEN_BROWSER_ON_SLOT=os.getenv('AUTO_OPEN_BROWSER_ON_SLOT','1')=='1'
@@ -229,31 +230,43 @@ def alert_slots(result,state):
     global turbo_until
     now=time.time(); key=result['key']
     new_dates,changed,removed=smart_diff(state,result,commit=False)
-    if not (new_dates or changed or removed): log(f'[{key}] NO DIFF — те же слоты, молчим'); return
-    # Защита от дребезга парсера: если нет НОВЫХ дат (только изменение количества),
-    # не чаще одного алерта в MIN_CHANGE_ALERT_GAP сек по одному ключу. Новые даты — всегда сразу.
-    # Состояние при подавлении НЕ записывается, поэтому изменение не теряется — алерт уйдёт на следующем круге.
-    if not new_dates and now-last_change_alert_time_by_key.get(key,0)<MIN_CHANGE_ALERT_GAP:
-        log(f'[{key}] CHANGE GAP GUARD (алерт уйдёт на следующем круге)'); return
-    smart_diff(state,result,commit=True)
     emoji,tier,sms_count=tier_of(result['calendar_name'])
+    # ── ПРАВИЛА (одинаковые для всех, VIP просто шлёт больше сообщений) ──
+    #  Новая дата        → СРОЧНО (sms_count: Student 2 / Standard 5 / VIP 12)
+    #  Мест стало БОЛЬШЕ → СРОЧНО (тот же sms_count → VIP автоматически агрессивнее)
+    #  Мест стало МЕНЬШЕ → тишина у всех
+    #  Слот исчез        → одно сообщение
+    increased={d:(o,n) for d,(o,n) in changed.items() if n>o}
+    decreased={d:(o,n) for d,(o,n) in changed.items() if n<o}
+    urgent = bool(new_dates) or bool(increased)
+    if not (urgent or removed):
+        # только уменьшение (или ничего) — молча зафиксировать
+        if changed:
+            smart_diff(state,result,commit=True)
+            log(f'[{key}] MEST AZALDI (sessiz: {tier}) — bildirim yok')
+        else:
+            log(f'[{key}] NO DIFF — те же слоты, молчим')
+        return
+    smart_diff(state,result,commit=True)
     slots=result['slots']; lines=[]
     for d in sorted(new_dates): lines.append(f"🆕 {fmt_date(d)} — {new_dates[d]} мест")
-    for d in sorted(changed):
-        o,n=changed[d]; lines.append(f"🔄 {fmt_date(d)} — было {o}, стало {n}")
+    for d in sorted(increased):
+        o,n=increased[d]; lines.append(f"📈 {fmt_date(d)} — мест стало больше: {o} → {n}")
     for d in sorted(removed): lines.append(f"❌ {fmt_date(d)} — было {removed[d]}, исчезло")
-    header=f"🚨🚨🚨 {emoji} {tier} | НОВЫЕ СЛОТЫ 🚨🚨🚨" if new_dates else f"{emoji} {tier} | ИЗМЕНЕНИЕ СЛОТОВ"
+    if new_dates: header=f"🚨🚨🚨 {emoji} {tier} | НОВЫЕ СЛОТЫ 🚨🚨🚨"
+    elif increased: header=f"📈🚨 {emoji} {tier} | БОЛЬШЕ МЕСТ 🚨"
+    else: header=f"{emoji} {tier} | СЛОТЫ ИСЧЕЗЛИ"
     nearest=f"\n📍 Ближайшая дата: {fmt_date(slots[0]['date'])}" if slots else ''
     msg=(f"{header} [{BOT_NAME}]\n🏷 {result['calendar_name']}\n📅 {result['month_title']}{nearest}\nВсего дней с местами: {len(slots)}\n"+'\n'.join(lines[:20])+f"\n👉 {result['url']}")
     append_history({'time':datetime.now().isoformat(timespec='seconds'),'calendar':result['calendar_name'],'month':result['month_title'],'url':result['url'],'slots':slots,'new':new_dates,'changed':{d:list(v) for d,v in changed.items()},'removed':removed,'snapshot':result.get('snapshot','')})
-    if new_dates or changed:
+    if urgent:
         if AUTO_OPEN_BROWSER_ON_SLOT:
             try: webbrowser.open(result['url'])
             except Exception as e: log(f'BROWSER OPEN ERROR: {e}')
         if ENABLE_TURBO_AFTER_SLOT: turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT
-        repeats=sms_count
+        repeats=sms_count          # Student 2 / Standard 5 / VIP 12
     else:
-        repeats=1  # только исчезновение — одно сообщение, без флуда
+        repeats=1  # только исчезновение — одно сообщение
     for i in range(repeats):
         send_message(('🔥 СРОЧНО! ' if i else '')+msg,False)
         if i+1<repeats: time.sleep(FLOOD_ALERT_DELAY)
