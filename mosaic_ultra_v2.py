@@ -168,7 +168,7 @@ def parse_calendar_rows(html):
         out[iso]={'r':rem,'v':resv,'c':('cursor: pointer' in tag.lower())}
     return out
 
-def parse_slots(html,year_hint,label=''):
+def parse_slots(html,year_hint,label_ctx=''):
     """ТОЧНЫЙ парсинг календаря Mosaic по атрибутам строки таблицы:
         <tr data-date-formatted="28.07.2026" data-date="2026-07-28" data-remaining="1"
             class="calendar-dates" style="cursor: pointer...">
@@ -191,26 +191,24 @@ def parse_slots(html,year_hint,label=''):
         except Exception: continue
         try: dt=date.fromisoformat(iso)
         except Exception: continue
+        # ГЛАВНОЕ ПРАВИЛО (из кода самого сайта):
+        #   if(remaining === 0) return false;
+        # то есть ЛЮБОЙ день с data-remaining > 0 доступен для записи.
+        # Стиль курсора — только оформление, фильтровать по нему НЕЛЬЗЯ
+        # (проверено: 24.08.2026 с 285 местами открывается и форма заполняется).
         if dt<today or cnt<=0: continue
         clickable=('cursor: pointer' in tag.lower())
         fm=re.search(r'data-date-formatted\s*=\s*"([^"]*)"', tag)
         label=(fm.group(1) if fm else iso)
-        if not clickable:
-            # Мест указано, но день ЗАКРЫТ (нельзя выбрать) — это загруженная вместимость,
-            # а не свободные места. Записаться нельзя. Но это сильный ранний признак:
-            # админы готовят месяц. Отдаём отдельно, в ранние сигналы.
-            hidden[iso]={'date':iso,'text':label,'count':cnt}
-            log(f'HAZIRLIK [{label or "?"}] {iso}: {cnt} yer yüklü ama gün KAPALI — randevu bildirimi yok')
-            continue
         if cnt>MAX_SLOT_COUNT:
-            log(f'BÜYÜK AÇILIŞ [{label or "?"}] {iso}: {cnt} yer ve gün AÇIK — bildiriyorum')
-        res[iso]={'date':iso,'text':label,'count':cnt,'clickable':True}
+            log(f'BÜYÜK AÇILIŞ [{label_ctx or "?"}] {iso}: {cnt} yer — bildiriyorum')
+        res[iso]={'date':iso,'text':label,'count':cnt,'clickable':clickable}
     parse_slots.last_hidden=hidden
     if rows_seen:
         entries=sorted(res.values(), key=lambda x:x['date'])
         return entries, clean_html(html)
     # запасной вариант: разметка сайта изменилась — разбираем текстом по блокам дней
-    log(f'CALENDAR ROWS NOT FOUND [{label or "?"}] — запасной текстовый парсер')
+    log(f'CALENDAR ROWS NOT FOUND [{label_ctx or "?"}] — запасной текстовый парсер')
     return _parse_slots_text(html,year_hint), clean_html(html)
 
 def _find_date_tokens(text):
@@ -243,8 +241,8 @@ def _parse_slots_text(html,year_hint):
         if 0<c<=MAX_SLOT_COUNT: res[iso]={'date':iso,'text':dtxt.strip(),'count':c,'clickable':True}
     return sorted(res.values(), key=lambda x:x['date'])
 
-def detect_state(html,year_hint,label=''):
-    text=clean_html(html); low=text.lower(); slots,_=parse_slots(html,year_hint,label)
+def detect_state(html,year_hint,label_ctx=''):
+    text=clean_html(html); low=text.lower(); slots,_=parse_slots(html,year_hint,label_ctx)
     if slots: return 'SLOTS_FOUND',slots,text
     if 'calendar-dates' in html: return 'ZERO_SLOTS',[],text
     if re.search(r'Reserved[^0-9]{0,25}\d',text,flags=re.I) or re.search(r'\b\d{1,2}\s+[A-Za-z]{3,9}\b',text): return 'ZERO_SLOTS',[],text
