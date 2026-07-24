@@ -278,12 +278,8 @@ def is_new_slot_event(state,result):
 
 def tier_of(calendar_name):
     n=calendar_name.lower()
-    # Цвета строго по категориям:
-    # VIP = красный, Student = зелёный, Standard = жёлтый
-    if 'vip' in n:
-        return '🔴','VIP',VIP_SMS_COUNT
-    if 'student' in n:
-        return '🟢','STUDENT',STUDENT_SMS_COUNT
+    if 'student' in n: return '🟢','STUDENT',STUDENT_SMS_COUNT
+    if 'vip' in n: return '🔴','VIP',VIP_SMS_COUNT
     return '🟡','STANDARD',STANDARD_SMS_COUNT
 
 def fmt_date(iso):
@@ -378,11 +374,6 @@ def early_signal(result,state):
             soft.append(f"{fmt_date(d)}: занято {a['v']} → {b['v']}")
     if not hot and not soft and prev_state==st:
         save_state(state); return
-
-    # Любое изменение календарного состояния фиксируем в журнале,
-    # даже если свободных мест ещё нет.
-    if not hot and not soft and prev_state!=st:
-        hot.append(f"состояние сайта изменилось: {prev_state} → {st}")
     now=time.time()
     cd = SIGNAL_HOT_COOLDOWN if hot else SIGNAL_COOLDOWN
     if now-last_signal_time_by_key.get(key,0)<cd:
@@ -421,8 +412,6 @@ def alert_slots(result,state):
     #  Слот исчез        → одно сообщение
     increased={d:(o,n) for d,(o,n) in changed.items() if n>o}
     decreased={d:(o,n) for d,(o,n) in changed.items() if n<o}
-    # Новые слоты и увеличение количества мест = обязательно уведомление.
-    # Уменьшение количества мест никогда не отправляет SMS.
     urgent = bool(new_dates) or bool(increased)
     if not (urgent or removed):
         # только уменьшение (или ничего) — молча зафиксировать
@@ -456,24 +445,29 @@ def alert_slots(result,state):
             if still: confirm_note=f'\n✅ Подтверждено повторной проверкой ({len(still)} дн.)'
             else: confirm_note='\n⚠️ При повторной проверке мест уже НЕ видно — вероятно, заняли за секунды'
     
-    if new_dates:
-        if tier == 'VIP':
-            header=f"🚨🚨🚨 {emoji} {tier} | НОВЫЕ СЛОТЫ 🚨🚨🚨"
-        else:
-            header=f"{emoji} {tier} | НОВЫЕ СЛОТЫ"
-    elif increased:
-        if tier == 'VIP':
-            header=f"📈🚨 {emoji} {tier} | БОЛЬШЕ МЕСТ 🚨"
-        else:
-            header=f"📈 {emoji} {tier} | БОЛЬШЕ МЕСТ"
-    else:
-        header=f"{emoji} {tier} | СЛОТЫ ИСЧЕЗЛИ"
+    if new_dates: header=f"🚨🚨🚨 {emoji} {tier} | НОВЫЕ СЛОТЫ 🚨🚨🚨"
+    elif increased: header=f"📈🚨 {emoji} {tier} | БОЛЬШЕ МЕСТ 🚨"
+    else: header=f"{emoji} {tier} | СЛОТЫ ИСЧЕЗЛИ"
     nearest=f"\n📍 Ближайшая дата: {fmt_date(slots[0]['date'])}" if slots else ''
     msg=(f"{header} [{BOT_NAME}]\n🏷 {result['calendar_name']}\n📅 {result['month_title']}{nearest}\nВсего дней с местами: {len(slots)}\n"+'\n'.join(lines[:20])+confirm_note+f"\n👉 {result['url']}")
     append_history({'time':datetime.now().isoformat(timespec='seconds'),'calendar':result['calendar_name'],'month':result['month_title'],'url':result['url'],'slots':slots,'new':new_dates,'changed':{d:list(v) for d,v in changed.items()},'removed':removed,'snapshot':result.get('snapshot','')})
+    # ── ДЕДУП: не долбим одно и то же уведомление, если ничего не поменялось ──
+    dedup_key=f"{key}|new={sorted(new_dates.items())}|inc={sorted(increased.items())}|rem={sorted(removed.items())}"
+    dd=state.setdefault('alert_dedup',{})
+    if dd.get(key)==dedup_key and now-last_alert_time_by_key.get(key,0)<ALERT_COOLDOWN:
+        log(f'[{key}] DEDUP: то же уведомление, пропускаю')
+        return
+    dd[key]=dedup_key
+    # ── СЧЁТЧИКИ в state (для /stats) ──
+    totals=state.setdefault('totals',{'alerts':0,'new_slots':0,'errors':0,'started':datetime.now().isoformat(timespec='seconds')})
+    totals['alerts']+=1; totals['new_slots']+=len(new_dates)
     if urgent:
         if AUTO_OPEN_BROWSER_ON_SLOT:
-            try: webbrowser.open(result['url'])
+            # ── ТОЧНОЕ ОТКРЫТИЕ ДНЯ: берём прямую ссылку на найденную дату, а не месяц ──
+            _pick=(sorted(new_dates)+sorted(increased))[0] if (new_dates or increased) else None
+            open_url=day_links.get(_pick) if _pick else result['url']
+            open_url=open_url or result['url']
+            try: webbrowser.open(open_url); log(f'BROWSER OPEN: {open_url}')
             except Exception as e: log(f'BROWSER OPEN ERROR: {e}')
         if ENABLE_TURBO_AFTER_SLOT: turbo_until=time.time()+TURBO_SECONDS_AFTER_SLOT
         repeats=sms_count          # Student 2 / Standard 5 / VIP 12
@@ -484,11 +478,26 @@ def alert_slots(result,state):
         if i+1<repeats: time.sleep(FLOOD_ALERT_DELAY)
     if SEND_HTML_ON_SLOT and result.get('snapshot') and new_dates: send_document(result['snapshot'],'HTML snapshot найденного слота')
     last_alert_time_by_key[key]=now; last_change_alert_time_by_key[key]=now
+    save_state(state)
 
-def alert_error_once(result):
+def alert_error_once(result,state=None):
     now=time.time(); key=result['key']
-    if now-last_error_time_by_key.get(key,0)<ERROR_COOLDOWN: return
-    if send_message(f"⚠️ ОШИБКА [{BOT_NAME}]\n{key}\n{result.get('error','')[:700]}\n{result.get('url','')}",False): last_error_time_by_key[key]=now
+    # экспоненциальный бэкофф: чем больше ошибок подряд, тем реже уведомляем (но не реже ERROR_COOLDOWN*8)
+    if state is not None:
+        ec=state.setdefault('err_streak',{}); ec[key]=ec.get(key,0)+1
+        backoff=min(ERROR_COOLDOWN*(2**min(ec[key]-1,3)), ERROR_COOLDOWN*8)
+        state.setdefault('totals',{}).setdefault('errors',0)
+        state['totals']['errors']=state['totals'].get('errors',0)+1
+    else:
+        backoff=ERROR_COOLDOWN
+    if now-last_error_time_by_key.get(key,0)<backoff: return
+    streak=(state or {}).get('err_streak',{}).get(key,1)
+    if send_message(f"⚠️ ОШИБКА x{streak} [{BOT_NAME}]\n{key}\n{result.get('error','')[:700]}\n{result.get('url','')}",False):
+        last_error_time_by_key[key]=now
+
+def reset_err_streak(state,key):
+    ec=state.get('err_streak',{})
+    if key in ec: ec.pop(key,None); save_state(state)
 
 def last_history(limit=5):
     if not HISTORY_FILE.exists(): return 'Истории слотов пока нет.'
@@ -550,7 +559,7 @@ def do_full_scan():
     if errors: parts.append(f"\n⚠️ Ошибок при проверке: {errors}")
     send_message("\n".join(parts), False)
 
-def command_text(): return 'Команды:\n/scan — проверить всё сейчас (открытые + закрытые)\n/status — статус\n/pause — пауза\n/resume — продолжить\n/months — месяцы проверки\n/history — последние найденные слоты\n/turbo — ускорить на 5 минут\n/help — команды'
+def command_text(): return 'Команды:\n/scan — проверить всё сейчас (открытые + закрытые)\n/status — статус\n/stats — накопленная статистика\n/open — открыть в браузере ближайший известный слот\n/pause — пауза\n/resume — продолжить\n/months — месяцы проверки\n/history — последние найденные слоты\n/turbo — ускорить на 5 минут\n/help — команды'
 
 def handle_command(text,state):
     global paused,turbo_until
@@ -565,6 +574,22 @@ def handle_command(text,state):
         send_message(f"ℹ️ STATUS NOW [{BOT_NAME}]\nПауза: {'да' if paused else 'нет'}\nTurbo: {'да' if time.time()<turbo_until else 'нет'}\nПоследний круг: {state.get('last_circle_time','-')}\nПоследнее изменение: {state.get('last_change_time','-') or '-'}\nПроверок: {sum(st.values())}\nСлоты: {st.get('SLOTS_FOUND',0)}\nБез мест: {st.get('ZERO_SLOTS',0)}\nПустые: {st.get('EMPTY_MONTH',0)}\nОшибки: {st.get('ERROR',0)+st.get('HTTP_ERROR',0)+st.get('UNKNOWN',0)}\n📋 Известные слоты:\n{known_slots_summary(state)}")
     elif cmd=='/scan':
         threading.Thread(target=do_full_scan, daemon=True).start()
+    elif cmd=='/stats':
+        t=state.get('totals',{}); es=state.get('err_streak',{})
+        top_err=sorted(es.items(),key=lambda x:-x[1])[:5]
+        send_message(f"📊 STATS [{BOT_NAME}]\nЗапущен: {t.get('started','-')}\nВсего уведомлений: {t.get('alerts',0)}\nНовых слотов найдено: {t.get('new_slots',0)}\nОшибок всего: {t.get('errors',0)}\nПоследний круг: {state.get('last_circle_time','-')}\nПоследнее изменение: {state.get('last_change_time','-') or '-'}\n\nТоп ключей по ошибкам подряд:\n"+('\n'.join(f'  • {k}: {v}' for k,v in top_err) or '  — нет'))
+    elif cmd=='/open':
+        # открыть в браузере самый ранний известный слот из всех календарей
+        best=None
+        for key,slots in state.get('slot_map',{}).items():
+            for d,c in slots.items():
+                if c>0 and (best is None or d<best[1]): best=(key,d,c)
+        if not best: send_message('Открытых слотов сейчас не видно. Жду ближайший сигнал.'); 
+        else:
+            key,d,c=best
+            send_message(f"🌐 Открываю ближайший слот: {key} {fmt_date(d)} ({c} мест)")
+            try: webbrowser.open(f"https://appointment.mosaicvisa.com/")
+            except Exception as e: log(f'OPEN ERROR: {e}')
     elif cmd=='/help': send_message(command_text())
 
 def command_loop(state):
@@ -593,11 +618,11 @@ def main():
             for fut in as_completed({ex.submit(check_one,t):t for t in tasks}):
                 result=fut.result(); st=result['state']; stats[st]=stats.get(st,0)+1
                 early_signal(result,state)
-                if st=='SLOTS_FOUND': log(f"[{result['key']}] SLOTS: {result['slots']}"); alert_slots(result,state)
-                elif st in ('ERROR','HTTP_ERROR'): log(f"[{result['key']}] {st}: {result.get('error','')}"); alert_error_once(result)
+                if st=='SLOTS_FOUND': log(f"[{result['key']}] SLOTS: {result['slots']}"); alert_slots(result,state); reset_err_streak(state,result['key'])
+                elif st in ('ERROR','HTTP_ERROR'): log(f"[{result['key']}] {st}: {result.get('error','')}"); alert_error_once(result,state)
                 elif st=='UNKNOWN': log(f"[{result['key']}] UNKNOWN PAGE, SNAP={result.get('snapshot','')}")
                 else:
-                    log(f"[{result['key']}] {st}")
+                    log(f"[{result['key']}] {st}"); reset_err_streak(state,result['key'])
                     check_slots_gone(result,state)
                 time.sleep(random.uniform(0.05,0.25))
         state['last_stats']=stats; state['last_circle_time']=datetime.now().strftime('%d.%m.%Y %H:%M:%S'); save_state(state)
