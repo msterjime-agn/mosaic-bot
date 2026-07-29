@@ -346,13 +346,45 @@ def alert_slots(result, state):
     new_dates, changed, _ = smart_diff(state, result, commit=True)
     if not new_dates and not changed:
         return
-    emoji, tier, sms_count = tier_of(result['calendar_name'])
-    lines = [f"🆕 {fmt_date(d)} — {new_dates[d]} мест" for d in sorted(new_dates)]
-    msg = f"🚨 {emoji} {tier} СЛОТЫ НАЙДЕНЫ [{BOT_NAME}]\n{result['calendar_name']}\n{result['month_title']}\n" + "\n".join(lines) + f"\n{result['url']}"
-    for i in range(sms_count):
-        send_message(msg)
-        if i < sms_count - 1:
-            time.sleep(FLOOD_ALERT_DELAY)
+    emoji, tier, _ = tier_of(result['calendar_name'])
+
+    # Новый слот или увеличение количества мест = сообщение
+    increased = {
+        d: (old, new)
+        for d, (old, new) in changed.items()
+        if new > old
+    }
+
+    # Только уменьшение мест — молча
+    if not new_dates and not increased:
+        log(f'[{result["key"]}] уменьшение мест — без Telegram')
+        return
+
+    lines = []
+
+    for d in sorted(new_dates):
+        lines.append(f"🆕 {fmt_date(d)} — {new_dates[d]} мест")
+
+    for d in sorted(increased):
+        old, new = increased[d]
+        lines.append(f"📈 {fmt_date(d)} — мест стало больше: {old} → {new}")
+
+    msg = (
+        f"🚨 {emoji} {tier} СЛОТЫ НАЙДЕНЫ [{BOT_NAME}]
+"
+        f"{result['calendar_name']}
+"
+        f"{result['month_title']}
+
+"
+        + "
+".join(lines)
+        + f"
+{result['url']}"
+    )
+
+    # Одно сообщение без флудера
+    send_message(msg)
     if AUTO_OPEN_BROWSER_ON_SLOT:
         try:
             webbrowser.open(result['url'])
