@@ -369,7 +369,7 @@ def alert_slots(result, state):
         old, new = increased[d]
         lines.append(f"📈 {fmt_date(d)} — мест стало больше: {old} → {new}")
 
-    msg = (
+msg = (
     f"🚨 {emoji} {tier} СЛОТЫ НАЙДЕНЫ [{BOT_NAME}]\n"
     f"{result['calendar_name']}\n"
     f"{result['month_title']}\n\n"
