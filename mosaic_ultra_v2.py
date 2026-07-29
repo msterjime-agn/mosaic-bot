@@ -370,18 +370,12 @@ def alert_slots(result, state):
         lines.append(f"📈 {fmt_date(d)} — мест стало больше: {old} → {new}")
 
     msg = (
-        f"🚨 {emoji} {tier} СЛОТЫ НАЙДЕНЫ [{BOT_NAME}]
-"
-        f"{result['calendar_name']}
-"
-        f"{result['month_title']}
-
-"
-        + "
-".join(lines)
-        + f"
-{result['url']}"
-    )
+    f"🚨 {emoji} {tier} СЛОТЫ НАЙДЕНЫ [{BOT_NAME}]\n"
+    f"{result['calendar_name']}\n"
+    f"{result['month_title']}\n\n"
+    + "\n".join(lines)
+    + f"\n{result['url']}"
+)
 
     # Одно сообщение без флудера
     send_message(msg)
