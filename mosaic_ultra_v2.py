@@ -276,13 +276,6 @@ def is_new_slot_event(state,result):
     seen=state.setdefault('seen_slots',{}); old=set(seen.get(result['key'],[])); cur=set(f"{x['date']}:{x['count']}" for x in result['slots'])
     new=cur-old; seen[result['key']]=sorted(cur); save_state(state); return bool(new),new
 
-def tier_style(tier):
-    """Значки по категории: КРАСНОЕ только у VIP.
-       STUDENT — зелёное, STANDARD — жёлтое."""
-    if tier=='VIP':     return ('🚨','🔥')   # (значок тревоги, префикс повтора)
-    if tier=='STUDENT': return ('💚','🟢')
-    return ('💛','🟡')                        # STANDARD
-
 def tier_of(calendar_name):
     n=calendar_name.lower()
     if 'student' in n: return '🟢','STUDENT',STUDENT_SMS_COUNT
@@ -419,6 +412,7 @@ def alert_slots(result,state):
     #  Слот исчез        → одно сообщение
     increased={d:(o,n) for d,(o,n) in changed.items() if n>o}
     decreased={d:(o,n) for d,(o,n) in changed.items() if n<o}
+    # v6.1: уменьшение мест не является событием
     urgent = bool(new_dates) or bool(increased)
     if not (urgent or removed):
         # только уменьшение (или ничего) — молча зафиксировать
@@ -452,9 +446,8 @@ def alert_slots(result,state):
             if still: confirm_note=f'\n✅ Подтверждено повторной проверкой ({len(still)} дн.)'
             else: confirm_note='\n⚠️ При повторной проверке мест уже НЕ видно — вероятно, заняли за секунды'
     
-    alarm,urg=tier_style(tier)
-    if new_dates: header=f"{alarm*3} {emoji} {tier} | НОВЫЕ СЛОТЫ {alarm*3}"
-    elif increased: header=f"📈{alarm} {emoji} {tier} | БОЛЬШЕ МЕСТ {alarm}"
+    if new_dates: header=f"🚨🚨🚨 {emoji} {tier} | НОВЫЕ СЛОТЫ 🚨🚨🚨"
+    elif increased: header=f"📈🚨 {emoji} {tier} | БОЛЬШЕ МЕСТ 🚨"
     else: header=f"{emoji} {tier} | СЛОТЫ ИСЧЕЗЛИ"
     nearest=f"\n📍 Ближайшая дата: {fmt_date(slots[0]['date'])}" if slots else ''
     msg=(f"{header} [{BOT_NAME}]\n🏷 {result['calendar_name']}\n📅 {result['month_title']}{nearest}\nВсего дней с местами: {len(slots)}\n"+'\n'.join(lines[:20])+confirm_note+f"\n👉 {result['url']}")
@@ -481,9 +474,8 @@ def alert_slots(result,state):
         repeats=sms_count          # Student 2 / Standard 5 / VIP 12
     else:
         repeats=1  # только исчезновение — одно сообщение
-    for i in range(repeats):
-        send_message(((urg+' СРОЧНО! ') if i else '')+msg,False)
-        if i+1<repeats: time.sleep(FLOOD_ALERT_DELAY)
+    # v6.1: одно уведомление вместо повторного флуда
+    send_message(msg, False)
     if SEND_HTML_ON_SLOT and result.get('snapshot') and new_dates: send_document(result['snapshot'],'HTML snapshot найденного слота')
     last_alert_time_by_key[key]=now; last_change_alert_time_by_key[key]=now
     save_state(state)
@@ -616,7 +608,7 @@ def command_loop(state):
 
 def main():
     global turbo_until
-    log(f'🚀 BOT START {BOT_NAME}'); send_message(f'✅ ULTRA режим: бот запущен ({BOT_NAME})\nFlood alert: {FLOOD_ALERT_COUNT} сообщений\n{command_text()}',False)
+    log(f'🚀 BOT START {BOT_NAME}'); send_message(f'✅ ULTRA v6.1 режим: бот запущен ({BOT_NAME})\nFlood alert: {FLOOD_ALERT_COUNT} сообщений\n{command_text()}',False)
     state=load_state()
     if ENABLE_COMMANDS: threading.Thread(target=command_loop,args=(state,),daemon=True).start()
     while True:
