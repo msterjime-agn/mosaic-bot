@@ -377,7 +377,6 @@ msg = (
     + f"\n{result['url']}"
 )
 
-    # Одно сообщение без флудера
     send_message(msg)
     if AUTO_OPEN_BROWSER_ON_SLOT:
         try:
